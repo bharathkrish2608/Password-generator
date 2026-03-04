@@ -1,4 +1,4 @@
-import random
+import secrets
 import string
 from pathlib import Path
 from typing import List, Tuple
@@ -25,15 +25,25 @@ def generate_password(length: int, use_symbols: bool = True) -> str:
         SYMBOLS if use_symbols else string.ascii_letters + string.digits,
     ]
 
+    def _pick(pool: str) -> str:
+        return pool[secrets.randbelow(len(pool))]
+
+    def _shuffle(chars: List[str]) -> List[str]:
+        # Fisher-Yates using secrets for unpredictability
+        for i in range(len(chars) - 1, 0, -1):
+            j = secrets.randbelow(i + 1)
+            chars[i], chars[j] = chars[j], chars[i]
+        return chars
+
     # Guarantee one from each required category
-    password_chars = [random.choice(category) for category in categories[:3]]
+    password_chars = [_pick(category) for category in categories[:3]]
     if use_symbols:
-        password_chars.append(random.choice(SYMBOLS))
+        password_chars.append(_pick(SYMBOLS))
 
     pool = _build_pool(use_symbols)
     remaining = length - len(password_chars)
-    password_chars.extend(random.choice(pool) for _ in range(remaining))
-    random.shuffle(password_chars)
+    password_chars.extend(_pick(pool) for _ in range(remaining))
+    _shuffle(password_chars)
     return "".join(password_chars)
 
 

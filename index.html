@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Password Generator</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="panel">
+        <p class="eyebrow">Local-only · Instant</p>
+        <h1>Password Generator</h1>
+        <p class="lede">
+          Generate strong passwords in the browser. Nothing is uploaded or saved
+          unless you copy it yourself.
+        </p>
+
+        <form
+          id="generatorForm"
+          class="controls"
+          aria-label="Password generator settings"
+        >
+          <div class="field">
+            <label for="length">Length</label>
+            <div class="inline">
+              <input
+                type="range"
+                id="length"
+                name="length"
+                min="4"
+                max="64"
+                value="14"
+                aria-label="Password length"
+              />
+              <input
+                type="number"
+                id="lengthNumber"
+                min="4"
+                max="64"
+                value="14"
+                aria-label="Password length number"
+              />
+            </div>
+          </div>
+
+          <div class="field checkbox">
+            <input type="checkbox" id="symbols" name="symbols" checked />
+            <label for="symbols">Include symbols (!@#$…)</label>
+          </div>
+
+          <button type="submit" class="primary">Generate</button>
+        </form>
+
+        <div class="output" aria-live="polite">
+          <div class="password-row">
+            <div class="password" id="password">Tap generate</div>
+            <button type="button" id="copyBtn" class="ghost" disabled>
+              Copy
+            </button>
+          </div>
+          <div class="meta">
+            <span class="badge" id="strength">Strength: —</span>
+            <span class="note"
+              >Symbols: <span id="symbolsStatus">Yes</span></span
+            >
+          </div>
+          <ul class="tips" id="tips" aria-label="Password tips"></ul>
+          <p class="fine-print">Symbols used: !@#$%^&amp;*()-_=+[]{};:,.?/\|</p>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const lengthRange = document.getElementById("length");
+      const lengthNumber = document.getElementById("lengthNumber");
+      const symbolsCheckbox = document.getElementById("symbols");
+      const form = document.getElementById("generatorForm");
+      const passwordEl = document.getElementById("password");
+      const copyBtn = document.getElementById("copyBtn");
+      const strengthEl = document.getElementById("strength");
+      const tipsEl = document.getElementById("tips");
+      const symbolsStatusEl = document.getElementById("symbolsStatus");
+
+      const clamp = (value, min, max) =>
+        Math.min(Math.max(Number(value) || min, min), max);
+
+      const syncLengthInputs = (value) => {
+        const clamped = clamp(value, 4, 64);
+        lengthRange.value = clamped;
+        lengthNumber.value = clamped;
+      };
+
+      const renderTips = (tips) => {
+        tipsEl.innerHTML = "";
+        tips.forEach((tip) => {
+          const li = document.createElement("li");
+          li.textContent = tip;
+          tipsEl.appendChild(li);
+        });
+      };
+
+      const updateStrengthBadge = (label) => {
+        strengthEl.textContent = `Strength: ${label}`;
+        strengthEl.dataset.level = label.toLowerCase();
+      };
+
+      async function requestPassword(length, useSymbols) {
+        const response = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ length, symbols: useSymbols }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ error: "Error" }));
+          throw new Error(error.error || "Unable to generate password");
+        }
+
+        return response.json();
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const length = clamp(lengthRange.value, 4, 64);
+        const useSymbols = symbolsCheckbox.checked;
+        syncLengthInputs(length);
+
+        passwordEl.textContent = "Generating...";
+        copyBtn.disabled = true;
+        updateStrengthBadge("—");
+        renderTips([]);
+
+        try {
+          const result = await requestPassword(length, useSymbols);
+          passwordEl.textContent = result.password;
+          passwordEl.dataset.state = "filled";
+          copyBtn.disabled = false;
+          symbolsStatusEl.textContent = result.symbols ? "Yes" : "No";
+          updateStrengthBadge(result.strength);
+          renderTips(result.tips || []);
+        } catch (err) {
+          passwordEl.textContent = err.message;
+          copyBtn.disabled = true;
+        }
+      });
+
+      lengthRange.addEventListener("input", (event) =>
+        syncLengthInputs(event.target.value),
+      );
+      lengthNumber.addEventListener("input", (event) =>
+        syncLengthInputs(event.target.value),
+      );
+
+      copyBtn.addEventListener("click", async () => {
+        const text =
+          passwordEl.dataset.state === "filled" ? passwordEl.textContent : "";
+        if (!text) return;
+        try {
+          await navigator.clipboard.writeText(text);
+          copyBtn.textContent = "Copied";
+          setTimeout(() => (copyBtn.textContent = "Copy"), 1200);
+        } catch (err) {
+          copyBtn.textContent = "Unable";
+          setTimeout(() => (copyBtn.textContent = "Copy"), 1200);
+        }
+      });
+
+      syncLengthInputs(14);
+    </script>
+  </body>
+</html>
