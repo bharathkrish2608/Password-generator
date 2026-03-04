@@ -19,6 +19,16 @@ def _coerce_int(value: Any, default: int) -> int:
         return default
 
 
+def _coerce_bool(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    if isinstance(value, (int, float)):
+        return value != 0
+    return default
+
+
 def _clamp(value: int, minimum: int, maximum: int) -> int:
     return max(minimum, min(value, maximum))
 
@@ -32,16 +42,31 @@ def root() -> Any:  # pragma: no cover - simple file serving
 def api_generate() -> Any:
     data: Optional[Dict[str, Any]] = request.get_json(silent=True) or {}
     length_raw = data.get("length", 14)
-    use_symbols = bool(data.get("symbols", True))
+    use_symbols = _coerce_bool(data.get("symbols", True), True)
+    use_upper = _coerce_bool(data.get("upper", True), True)
+    use_lower = _coerce_bool(data.get("lower", True), True)
+    use_digits = _coerce_bool(data.get("digits", True), True)
 
     length = _clamp(_coerce_int(length_raw, 14), MIN_LENGTH, MAX_LENGTH)
 
     try:
-        password = generate_password(length, use_symbols)
+        password = generate_password(
+            length,
+            use_symbols=use_symbols,
+            use_upper=use_upper,
+            use_lower=use_lower,
+            use_digits=use_digits,
+        )
     except ValueError as exc:  # length guard
         return jsonify({"error": str(exc)}), 400
 
-    strength, tips = assess_strength(password, use_symbols)
+    strength, tips = assess_strength(
+        password,
+        symbols_allowed=use_symbols,
+        upper_allowed=use_upper,
+        lower_allowed=use_lower,
+        digits_allowed=use_digits,
+    )
     return jsonify(
         {
             "password": password,

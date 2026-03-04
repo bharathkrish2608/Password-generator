@@ -49,6 +49,21 @@
             <label for="symbols">Include symbols (!@#$…)</label>
           </div>
 
+          <div class="field checkbox">
+            <input type="checkbox" id="upper" name="upper" checked />
+            <label for="upper">Uppercase letters</label>
+          </div>
+
+          <div class="field checkbox">
+            <input type="checkbox" id="lower" name="lower" checked />
+            <label for="lower">Lowercase letters</label>
+          </div>
+
+          <div class="field checkbox">
+            <input type="checkbox" id="digits" name="digits" checked />
+            <label for="digits">Numbers</label>
+          </div>
+
           <button type="submit" class="primary">Generate</button>
         </form>
 
@@ -61,8 +76,8 @@
           </div>
           <div class="meta">
             <span class="badge" id="strength">Strength: —</span>
-            <span class="note"
-              >Symbols: <span id="symbolsStatus">Yes</span></span
+            <span class="note" id="selectionNote"
+              >Sets: upper, lower, digits, symbols</span
             >
           </div>
           <ul class="tips" id="tips" aria-label="Password tips"></ul>
@@ -75,12 +90,15 @@
       const lengthRange = document.getElementById("length");
       const lengthNumber = document.getElementById("lengthNumber");
       const symbolsCheckbox = document.getElementById("symbols");
+      const upperCheckbox = document.getElementById("upper");
+      const lowerCheckbox = document.getElementById("lower");
+      const digitsCheckbox = document.getElementById("digits");
       const form = document.getElementById("generatorForm");
       const passwordEl = document.getElementById("password");
       const copyBtn = document.getElementById("copyBtn");
       const strengthEl = document.getElementById("strength");
       const tipsEl = document.getElementById("tips");
-      const symbolsStatusEl = document.getElementById("symbolsStatus");
+      const selectionNoteEl = document.getElementById("selectionNote");
 
       const clamp = (value, min, max) =>
         Math.min(Math.max(Number(value) || min, min), max);
@@ -105,11 +123,22 @@
         strengthEl.dataset.level = label.toLowerCase();
       };
 
-      async function requestPassword(length, useSymbols) {
+      const updateSelectionNote = (flags) => {
+        const parts = [];
+        if (flags.upper) parts.push("upper");
+        if (flags.lower) parts.push("lower");
+        if (flags.digits) parts.push("digits");
+        if (flags.symbols) parts.push("symbols");
+        selectionNoteEl.textContent = parts.length
+          ? `Sets: ${parts.join(", ")}`
+          : "No character sets selected";
+      };
+
+      async function requestPassword(length, flags) {
         const response = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ length, symbols: useSymbols }),
+          body: JSON.stringify({ length, ...flags }),
         });
 
         if (!response.ok) {
@@ -123,20 +152,25 @@
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const length = clamp(lengthRange.value, 4, 64);
-        const useSymbols = symbolsCheckbox.checked;
+        const flags = {
+          symbols: symbolsCheckbox.checked,
+          upper: upperCheckbox.checked,
+          lower: lowerCheckbox.checked,
+          digits: digitsCheckbox.checked,
+        };
         syncLengthInputs(length);
 
         passwordEl.textContent = "Generating...";
         copyBtn.disabled = true;
         updateStrengthBadge("—");
         renderTips([]);
+        updateSelectionNote(flags);
 
         try {
-          const result = await requestPassword(length, useSymbols);
+          const result = await requestPassword(length, flags);
           passwordEl.textContent = result.password;
           passwordEl.dataset.state = "filled";
           copyBtn.disabled = false;
-          symbolsStatusEl.textContent = result.symbols ? "Yes" : "No";
           updateStrengthBadge(result.strength);
           renderTips(result.tips || []);
         } catch (err) {

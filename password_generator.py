@@ -3,27 +3,44 @@ import string
 from pathlib import Path
 from typing import List, Tuple
 
-# Symbol set kept explicit so users know exactly what may appear
 SYMBOLS = "!@#$%^&*()-_=+[]{};:,.?/\\|"  # noqa: W605 backslash for pool
 
 
-def _build_pool(use_symbols: bool) -> str:
-    pool = string.ascii_lowercase + string.ascii_uppercase + string.digits
+def _build_pool(use_upper: bool, use_lower: bool, use_digits: bool, use_symbols: bool) -> str:
+    pool = ""
+    if use_lower:
+        pool += string.ascii_lowercase
+    if use_upper:
+        pool += string.ascii_uppercase
+    if use_digits:
+        pool += string.digits
     if use_symbols:
         pool += SYMBOLS
     return pool
 
 
-def generate_password(length: int, use_symbols: bool = True) -> str:
+def generate_password(
+    length: int,
+    use_symbols: bool = True,
+    use_upper: bool = True,
+    use_lower: bool = True,
+    use_digits: bool = True,
+) -> str:
     if length < 4:
         raise ValueError("Password length must be at least 4 characters.")
 
-    categories = [
-        string.ascii_uppercase,
-        string.ascii_lowercase,
-        string.digits,
-        SYMBOLS if use_symbols else string.ascii_letters + string.digits,
-    ]
+    if not any([use_upper, use_lower, use_digits, use_symbols]):
+        raise ValueError("Enable at least one character set.")
+
+    categories = []
+    if use_upper:
+        categories.append(string.ascii_uppercase)
+    if use_lower:
+        categories.append(string.ascii_lowercase)
+    if use_digits:
+        categories.append(string.digits)
+    if use_symbols:
+        categories.append(SYMBOLS)
 
     def _pick(pool: str) -> str:
         return pool[secrets.randbelow(len(pool))]
@@ -35,19 +52,23 @@ def generate_password(length: int, use_symbols: bool = True) -> str:
             chars[i], chars[j] = chars[j], chars[i]
         return chars
 
-    # Guarantee one from each required category
-    password_chars = [_pick(category) for category in categories[:3]]
-    if use_symbols:
-        password_chars.append(_pick(SYMBOLS))
+    # Guarantee one from each selected category
+    password_chars = [_pick(category) for category in categories]
 
-    pool = _build_pool(use_symbols)
+    pool = _build_pool(use_upper, use_lower, use_digits, use_symbols)
     remaining = length - len(password_chars)
     password_chars.extend(_pick(pool) for _ in range(remaining))
     _shuffle(password_chars)
     return "".join(password_chars)
 
 
-def assess_strength(password: str, symbols_allowed: bool) -> Tuple[str, List[str]]:
+def assess_strength(
+    password: str,
+    symbols_allowed: bool,
+    upper_allowed: bool = True,
+    lower_allowed: bool = True,
+    digits_allowed: bool = True,
+) -> Tuple[str, List[str]]:
     tips: List[str] = []
     length = len(password)
 
@@ -72,11 +93,11 @@ def assess_strength(password: str, symbols_allowed: bool) -> Tuple[str, List[str
     if label == "Weak":
         if length < 12:
             tips.append("Increase the length to at least 12 characters.")
-        if not has_upper:
+        if upper_allowed and not has_upper:
             tips.append("Add uppercase letters.")
-        if not has_lower:
+        if lower_allowed and not has_lower:
             tips.append("Add lowercase letters.")
-        if not has_digit:
+        if digits_allowed and not has_digit:
             tips.append("Include numbers.")
         if symbols_allowed and not has_symbol:
             tips.append("Include symbols for better entropy.")
