@@ -1,5 +1,6 @@
 import secrets
 import string
+from math import log2
 from pathlib import Path
 from typing import List, Tuple
 
@@ -17,6 +18,84 @@ def _build_pool(use_upper: bool, use_lower: bool, use_digits: bool, use_symbols:
     if use_symbols:
         pool += SYMBOLS
     return pool
+
+
+def _format_crack_time(seconds: float) -> str:
+    if seconds <= 0:
+        return "Instantly"
+    if seconds < 1:
+        return "< 1 second"
+    if seconds < 60:
+        value = round(seconds)
+        unit = "second" if value == 1 else "seconds"
+        return f"{value} {unit}"
+
+    minutes = seconds / 60
+    if minutes < 60:
+        value = round(minutes)
+        unit = "minute" if value == 1 else "minutes"
+        return f"{value} {unit}"
+
+    hours = minutes / 60
+    if hours < 24:
+        value = round(hours)
+        unit = "hour" if value == 1 else "hours"
+        return f"{value} {unit}"
+
+    days = hours / 24
+    if days < 365:
+        value = round(days)
+        unit = "day" if value == 1 else "days"
+        return f"{value} {unit}"
+
+    years = days / 365.25
+    if years < 1_000:
+        value = round(years)
+        unit = "year" if value == 1 else "years"
+        return f"{value} {unit}"
+
+    if years < 1_000_000:
+        value = round(years / 1_000, 1)
+        return f"{value:g} thousand years"
+
+    if years < 1_000_000_000:
+        value = round(years / 1_000_000, 1)
+        return f"{value:g} million years"
+
+    if years < 1_000_000_000_000:
+        value = round(years / 1_000_000_000, 1)
+        return f"{value:g} billion years"
+
+    return "> a trillion years"
+
+
+def estimate_entropy_and_crack_time(
+    length: int,
+    use_upper: bool,
+    use_lower: bool,
+    use_digits: bool,
+    use_symbols: bool,
+    guesses_per_second: float = 1e9,
+) -> Tuple[float, float, str]:
+    """Estimate entropy and online cracking time.
+
+    Entropy is approximated as length * log2(character_set_size).
+    Crack time assumes a constant guesses-per-second rate and
+    a random brute-force attacker needing half the keyspace on average.
+    """
+
+    pool = _build_pool(use_upper, use_lower, use_digits, use_symbols)
+    if not pool or length <= 0 or guesses_per_second <= 0:
+        return 0.0, 0.0, "Instantly"
+
+    charset_size = len(set(pool))
+    entropy_bits = length * log2(charset_size)
+
+    # Expected guesses is half the keyspace: 2^(entropy-1)
+    expected_guesses = 2 ** (entropy_bits - 1)
+    crack_seconds = expected_guesses / guesses_per_second
+    display = _format_crack_time(crack_seconds)
+    return entropy_bits, crack_seconds, display
 
 
 def generate_password(
@@ -155,6 +234,15 @@ def main() -> None:
             generated.append(pwd)
             print(f"\nPassword: {pwd}")
             print(f"Strength: {strength}")
+            entropy_bits, _, crack_display = estimate_entropy_and_crack_time(
+                len(pwd),
+                use_upper=True,
+                use_lower=True,
+                use_digits=True,
+                use_symbols=use_symbols,
+            )
+            print(f"Entropy: {entropy_bits:.1f} bits")
+            print(f"Estimated crack time (@ 1e9 guesses/sec): {crack_display}")
             if tips:
                 print("Tips:")
                 for tip in tips:

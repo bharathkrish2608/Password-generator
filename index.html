@@ -79,6 +79,9 @@
             <span class="note" id="selectionNote"
               >Sets: upper, lower, digits, symbols</span
             >
+            <span class="note" id="entropy"
+              >Entropy: — bits · Crack time: —</span
+            >
           </div>
           <ul class="tips" id="tips" aria-label="Password tips"></ul>
           <p class="fine-print">Symbols used: !@#$%^&amp;*()-_=+[]{};:,.?/\|</p>
@@ -99,6 +102,7 @@
       const strengthEl = document.getElementById("strength");
       const tipsEl = document.getElementById("tips");
       const selectionNoteEl = document.getElementById("selectionNote");
+      const entropyEl = document.getElementById("entropy");
 
       const clamp = (value, min, max) =>
         Math.min(Math.max(Number(value) || min, min), max);
@@ -165,6 +169,7 @@
         updateStrengthBadge("—");
         renderTips([]);
         updateSelectionNote(flags);
+        entropyEl.textContent = "Entropy: — bits · Crack time: —";
 
         try {
           const result = await requestPassword(length, flags);
@@ -173,6 +178,11 @@
           copyBtn.disabled = false;
           updateStrengthBadge(result.strength);
           renderTips(result.tips || []);
+          if (typeof result.entropy_bits === "number") {
+            const bits = result.entropy_bits.toFixed(1);
+            const crack = result.crack_time_display || "?";
+            entropyEl.textContent = `Entropy: ${bits} bits · Crack time: ${crack}`;
+          }
         } catch (err) {
           passwordEl.textContent = err.message;
           copyBtn.disabled = true;
